@@ -14,7 +14,7 @@ public class Event {
     private String coverPicture;
     private String profilePicture;
     private String description;
-    private String distance;
+    private int distance;
     private String startTime;
     private String endTime;
     private Integer timeFromNow;
@@ -70,11 +70,11 @@ public class Event {
         this.description = description;
     }
 
-    public String getDistance() {
+    public int getDistance() {
         return distance;
     }
 
-    public void setDistance(String distance) {
+    public void setDistance(int distance) {
         this.distance = distance;
     }
 

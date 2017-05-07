@@ -1,8 +1,35 @@
-<fragment xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:map="http://schemas.android.com/apk/res-auto"
+<?xml version="1.0" encoding="utf-8"?>
+<android.support.design.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
-    android:id="@+id/map"
-    android:name="com.google.android.gms.maps.SupportMapFragment"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context="me.yangchao.whatson.ui.MapsActivity" />
+    tools:context="me.yangchao.whatson.ui.MapsActivity">
+
+    <!-- include app bar -->
+    <!--<include layout="@layout/app_bar" />-->
+
+
+    <fragment
+        android:id="@+id/map"
+        android:name="com.google.android.gms.maps.SupportMapFragment"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+
+
+    <!-- include bottom sheet -->
+    <include layout="@layout/bottom_sheet" />
+
+    <android.support.design.widget.FloatingActionButton
+        android:id="@+id/route_fab"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_margin="16dp"
+        android:src="@drawable/ic_directions_black_24dp"
+        app:layout_anchor="@+id/title_zone"
+        app:layout_anchorGravity="top|end" />
+
+</android.support.design.widget.CoordinatorLayout>
+
+

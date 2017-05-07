@@ -1,49 +1,97 @@
 package me.yangchao.whatson.ui;
 
 import android.Manifest;
-import android.location.Location;
+import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Message;
 import android.support.annotation.NonNull;
-import android.support.v4.app.FragmentActivity;
+import android.support.design.widget.BottomSheetBehavior;
+import android.support.design.widget.FloatingActionButton;
 import android.view.View;
 import android.widget.ImageView;
 import android.widget.TextView;
 
+import com.bumptech.glide.Glide;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.UiSettings;
+import com.google.android.gms.maps.model.Dot;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.android.gms.maps.model.Polyline;
+import com.google.android.gms.maps.model.PolylineOptions;
 import com.google.maps.android.clustering.ClusterManager;
 
-import java.net.URI;
+import org.w3c.dom.Document;
+
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import butterknife.BindView;
+import butterknife.ButterKnife;
 import me.yangchao.whatson.R;
 import me.yangchao.whatson.model.Event;
 import me.yangchao.whatson.net.EventApi;
+import me.yangchao.whatson.net.GMapV2Direction;
+import me.yangchao.whatson.net.GMapV2DirectionAsyncTask;
+import me.yangchao.whatson.util.MessageFormaterUtil;
+import me.yangchao.whatson.util.StringUtil;
 import permissions.dispatcher.NeedsPermission;
 import permissions.dispatcher.RuntimePermissions;
 import pl.charmas.android.reactivelocation.ReactiveLocationProvider;
 
+import static android.support.design.widget.BottomSheetBehavior.STATE_EXPANDED;
+import static android.support.design.widget.BottomSheetBehavior.STATE_HIDDEN;
+import static android.view.View.VISIBLE;
+
 @RuntimePermissions
-public class MapsActivity extends FragmentActivity implements OnMapReadyCallback {
-    GoogleMap mMap;
+public class MapsActivity extends BaseActivity implements OnMapReadyCallback, GoogleMap.OnMarkerClickListener {
+    GoogleMap googleMap;
     UiSettings uiSettings;
 //    private GoogleApiClient mGoogleApiClient;
-    private Location mLastLocation;
 
     ReactiveLocationProvider locationProvider;
+    private BottomSheetBehavior<View> bottomSheetBehavior;
+
+    @BindView(R.id.event_name)
+    TextView vEventName;
+    @BindView(R.id.event_description)
+    TextView vEventDescription;
+    @BindView(R.id.event_venue)
+    TextView vEventVenue;
+    @BindView(R.id.event_cover_picture)
+    ImageView vEventCoverPicture;
+    @BindView(R.id.event_time)
+    TextView vEventTime;
+    @BindView(R.id.event_distance)
+    TextView vEventDistance;
+    @BindView(R.id.event_walk)
+    TextView vEventWalk;
+    @BindView(R.id.event_stats)
+    TextView vEventStats;
+    @BindView(R.id.route_fab)
+    FloatingActionButton routeFAB;
+
+    Event currentEvent;
+    LatLng currentLocation;
+    Polyline currentRoute;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_maps);
+        ButterKnife.bind(this);
+
+        addToolbar(true);
+//        getWindow().addFlags(WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS);
+
         // Obtain the SupportMapFragment and get notified when the map is ready to be used.
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.map);
@@ -51,15 +99,71 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
         locationProvider = new ReactiveLocationProvider(this);
 
+        View llBottomSheet = findViewById(R.id.bottom_sheet);
 
-        // Create an instance of GoogleAPIClient.
-//        if (mGoogleApiClient == null) {
-//            mGoogleApiClient = new GoogleApiClient.Builder(this)
-//                    .addConnectionCallbacks(this)
-//                    .addOnConnectionFailedListener(this)
-//                    .addApi(LocationServices.API)
-//                    .build();
-//        }
+        // init the bottom sheet behavior
+        bottomSheetBehavior = BottomSheetBehavior.from(llBottomSheet);
+        bottomSheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
+        bottomSheetBehavior.setBottomSheetCallback(new BottomSheetBehavior.BottomSheetCallback() {
+            @Override
+            public void onStateChanged(@NonNull View bottomSheet, int newState) {
+                if(newState != STATE_EXPANDED) {
+//                    vEventCoverPicture.setVisibility(VISIBLE);
+//                } else {
+                    vEventCoverPicture.setVisibility(View.GONE);
+                }
+                if(newState == STATE_HIDDEN) {
+                    routeFAB.hide();
+                } else {
+                    routeFAB.show();
+                }
+            }
+
+            @Override
+            public void onSlide(@NonNull View bottomSheet, float slideOffset) {
+                System.out.println(slideOffset);
+                if(slideOffset > .75f) {
+                    vEventCoverPicture.setVisibility(VISIBLE);
+                } else {
+                    vEventCoverPicture.setVisibility(View.GONE);
+                }
+            }
+        });
+        routeFAB.hide();
+        routeFAB.setOnClickListener(v -> {
+            if(currentEvent != null && currentLocation != null) {
+                drawRoute(currentLocation, currentEvent.getLatLng());
+            }
+        });
+    }
+
+    private void drawRoute(LatLng sourcePosition, LatLng destPosition) {
+        if(currentRoute != null) currentRoute.remove();
+        final Handler handler = new Handler() {
+            public void handleMessage(Message msg) {
+                try {
+                    Document doc = (Document) msg.obj;
+                    GMapV2Direction md = new GMapV2Direction();
+                    ArrayList<LatLng> directionPoint = md.getDirection(doc);
+                    PolylineOptions rectLine = new PolylineOptions().
+                            pattern(Arrays.asList(new Dot())).
+                            width(20).
+                            color(Color.DKGRAY);
+
+                    for (int i = 0; i < directionPoint.size(); i++) {
+                        rectLine.add(directionPoint.get(i));
+                    }
+                    currentRoute = googleMap.addPolyline(rectLine);
+                    md.getDurationText(doc);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        };
+
+        new GMapV2DirectionAsyncTask(handler, sourcePosition, destPosition, GMapV2Direction.MODE_WALKING).execute();
+
+
     }
 
     @Override
@@ -83,19 +187,12 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
      */
     @Override
     public void onMapReady(GoogleMap googleMap) {
-        mMap = googleMap;
-        uiSettings = mMap.getUiSettings();
+        this.googleMap = googleMap;
+        uiSettings = this.googleMap.getUiSettings();
         uiSettings.setZoomControlsEnabled(true);
-        mMap.setInfoWindowAdapter(new EventInfoWindow());
-
-        // Initialize the manager with the context and the map.
-        // (Activity extends context, so we can pass 'this' in the constructor.)
-        mClusterManager = new ClusterManager<EventClusterItem>(this, mMap);
-
-        // Point the map's listeners at the listeners implemented by the cluster
-        // manager.
-//        mMap.setOnCameraIdleListener(mClusterManager);
-//        mMap.setOnMarkerClickListener(mClusterManager);
+//        this.googleMap.setInfoWindowAdapter(new EventInfoWindow());
+        this.googleMap.setOnMarkerClickListener(this);
+        googleMap.setPadding(0, 100, 0, 0);
 
         MapsActivityPermissionsDispatcher.updateLocationWithCheck(this);
     }
@@ -103,29 +200,53 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     // Declare a variable for the cluster manager.
     private ClusterManager<EventClusterItem> mClusterManager;
 
+    @Override
+    public boolean onMarkerClick(Marker marker) {
+
+        Event event = (Event) marker.getTag();
+        currentEvent = event;
+
+        // update UI
+        vEventName.setText(StringUtil.trim(event.getName(), 30));
+        vEventDescription.setText(event.getDescription());
+        vEventVenue.setText(event.getVenue().getName());
+        Glide.with(this)
+                .load(Uri.parse(event.getCoverPicture()))
+//                .signature(new StringSignature(String.valueOf(System.currentTimeMillis())))
+                .into(vEventCoverPicture);
+
+        vEventTime.setText(MessageFormaterUtil.timeRange(event.getStartTime(), event.getEndTime()));
+        vEventDistance.setText(MessageFormaterUtil.distance(event.getDistance()));
+        vEventWalk.setText(MessageFormaterUtil.walkTime(event.getDistance()));
+        vEventStats.setText(MessageFormaterUtil.stats(event.getStats()));
+
+        // show bottom sheet
+        bottomSheetBehavior.setState(BottomSheetBehavior.STATE_COLLAPSED);
+
+        return true;
+    }
+
     @NeedsPermission(Manifest.permission.ACCESS_FINE_LOCATION)
+    @SuppressWarnings({"MissingPermission"})
     public void updateLocation() {
-        mMap.setMyLocationEnabled(true);
+        googleMap.setMyLocationEnabled(true);
 //        uiSettings.setMyLocationButtonEnabled(true);
         locationProvider.getLastKnownLocation()
                 .subscribe(location -> {
-                    LatLng current = new LatLng(location.getLatitude(), location.getLongitude());
-                    mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(current, 15));
+                    currentLocation = new LatLng(location.getLatitude(), location.getLongitude());
+                    googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLocation, 15));
 
-                    EventApi.getNearbyEvents(current, 500, "venue", events -> {
+                    EventApi.getNearbyEvents(currentLocation, 1000, "venue", events -> {
                         events.stream().collect(Collectors.groupingBy(event -> event.getLatLng())).entrySet().stream()
                         .forEach(e -> {
                             LatLng there = e.getKey();
                             List<Event> eventsThere = e.getValue();
                             for(int i = 0; i < eventsThere.size(); ++i) {
                                 Event event = eventsThere.get(i);
-                                mMap.addMarker(new MarkerOptions()
+                                googleMap.addMarker(new MarkerOptions()
                                     .position(event.getLatLng(i))
                                     .title(event.getName()))
                                 .setTag(event);
-
-//                                EventClusterItem offsetItem = new EventClusterItem(event, event.getLatLng(i));
-//                                mClusterManager.addItem(offsetItem);
                             }
                         });
 
@@ -141,27 +262,29 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         MapsActivityPermissionsDispatcher.onRequestPermissionsResult(this, requestCode, grantResults);
     }
 
-    class EventInfoWindow implements GoogleMap.InfoWindowAdapter {
-        View view;
 
-        public EventInfoWindow() {
-            view = getLayoutInflater().inflate(R.layout.event_info_window, null);
-        }
-        @Override
-        public View getInfoWindow(Marker marker) {
-            return null;
-        }
 
-        @Override
-        public View getInfoContents(Marker marker) {
-            Event event = (Event) marker.getTag();
-            TextView name = (TextView) view.findViewById(R.id.name);
-            name.setText(event.getName());
-            TextView description = (TextView) view.findViewById(R.id.description);
-            description.setText(event.getDescription());
-            ImageView coverPicture = (ImageView) view.findViewById(R.id.coverPicture);
-            coverPicture.setImageURI(Uri.parse(event.getCoverPicture()));
-            return view;
-        }
-    }
+//    class EventInfoWindow implements GoogleMap.InfoWindowAdapter {
+//        View view;
+//
+//        public EventInfoWindow() {
+//            view = getLayoutInflater().inflate(R.layout.event_info_window, null);
+//        }
+//        @Override
+//        public View getInfoWindow(Marker marker) {
+//            return null;
+//        }
+//
+//        @Override
+//        public View getInfoContents(Marker marker) {
+//            Event event = (Event) marker.getTag();
+//            TextView name = (TextView) view.findViewById(R.id.name);
+//            name.setText(event.getName());
+//            TextView description = (TextView) view.findViewById(R.id.description);
+//            description.setText(event.getDescription());
+//            ImageView coverPicture = (ImageView) view.findViewById(R.id.coverPicture);
+//            coverPicture.setImageURI(Uri.parse(event.getCoverPicture()));
+//            return view;
+//        }
+//    }
 }
