@@ -1,4 +1,5 @@
 <resources>
     <string name="app_name">What\'s On</string>
     <string name="title_activity_maps">What\'s On</string>
+    <string name="preference_distance">distance</string>
 </resources>

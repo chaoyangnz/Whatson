@@ -1,6 +1,8 @@
 package me.yangchao.whatson.ui;
 
 import android.Manifest;
+import android.content.Context;
+import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
@@ -8,9 +10,15 @@ import android.os.Handler;
 import android.os.Message;
 import android.support.annotation.NonNull;
 import android.support.design.widget.BottomSheetBehavior;
+import android.support.design.widget.BottomSheetDialog;
 import android.support.design.widget.FloatingActionButton;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
 import android.view.View;
 import android.widget.ImageView;
+import android.widget.SeekBar;
+import android.widget.Switch;
 import android.widget.TextView;
 
 import com.bumptech.glide.Glide;
@@ -42,6 +50,7 @@ import me.yangchao.whatson.net.EventApi;
 import me.yangchao.whatson.net.GMapV2Direction;
 import me.yangchao.whatson.net.GMapV2DirectionAsyncTask;
 import me.yangchao.whatson.util.MessageFormaterUtil;
+import me.yangchao.whatson.util.MetricsUtil;
 import me.yangchao.whatson.util.StringUtil;
 import permissions.dispatcher.NeedsPermission;
 import permissions.dispatcher.RuntimePermissions;
@@ -55,10 +64,9 @@ import static android.view.View.VISIBLE;
 public class MapsActivity extends BaseActivity implements OnMapReadyCallback, GoogleMap.OnMarkerClickListener {
     GoogleMap googleMap;
     UiSettings uiSettings;
-//    private GoogleApiClient mGoogleApiClient;
-
     ReactiveLocationProvider locationProvider;
-    private BottomSheetBehavior<View> bottomSheetBehavior;
+
+    BottomSheetBehavior<View> bottomSheetBehavior;
 
     @BindView(R.id.event_name)
     TextView vEventName;
@@ -83,18 +91,19 @@ public class MapsActivity extends BaseActivity implements OnMapReadyCallback, Go
     LatLng currentLocation;
     Polyline currentRoute;
 
+    SharedPreferences sharedPreferences;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_maps);
         ButterKnife.bind(this);
 
-        addToolbar(true);
-//        getWindow().addFlags(WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS);
+        sharedPreferences = getPreferences(Context.MODE_PRIVATE);
 
-        // Obtain the SupportMapFragment and get notified when the map is ready to be used.
-        SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
-                .findFragmentById(R.id.map);
+        addToolbar(true);
+
+        SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
 
         locationProvider = new ReactiveLocationProvider(this);
@@ -108,8 +117,6 @@ public class MapsActivity extends BaseActivity implements OnMapReadyCallback, Go
             @Override
             public void onStateChanged(@NonNull View bottomSheet, int newState) {
                 if(newState != STATE_EXPANDED) {
-//                    vEventCoverPicture.setVisibility(VISIBLE);
-//                } else {
                     vEventCoverPicture.setVisibility(View.GONE);
                 }
                 if(newState == STATE_HIDDEN) {
@@ -188,11 +195,11 @@ public class MapsActivity extends BaseActivity implements OnMapReadyCallback, Go
     @Override
     public void onMapReady(GoogleMap googleMap) {
         this.googleMap = googleMap;
+        googleMap.setPadding(0, MetricsUtil.dpToPx(this, 80), 0, MetricsUtil.dpToPx(this, 100));
         uiSettings = this.googleMap.getUiSettings();
         uiSettings.setZoomControlsEnabled(true);
 //        this.googleMap.setInfoWindowAdapter(new EventInfoWindow());
         this.googleMap.setOnMarkerClickListener(this);
-        googleMap.setPadding(0, 100, 0, 0);
 
         MapsActivityPermissionsDispatcher.updateLocationWithCheck(this);
     }
@@ -236,7 +243,7 @@ public class MapsActivity extends BaseActivity implements OnMapReadyCallback, Go
                     currentLocation = new LatLng(location.getLatitude(), location.getLongitude());
                     googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLocation, 15));
 
-                    EventApi.getNearbyEvents(currentLocation, 1000, "venue", events -> {
+                    EventApi.getNearbyEvents(currentLocation, 100*sharedPreferences.getInt(getString(R.string.preference_distance), 5), "venue", events -> {
                         events.stream().collect(Collectors.groupingBy(event -> event.getLatLng())).entrySet().stream()
                         .forEach(e -> {
                             LatLng there = e.getKey();
@@ -262,29 +269,63 @@ public class MapsActivity extends BaseActivity implements OnMapReadyCallback, Go
         MapsActivityPermissionsDispatcher.onRequestPermissionsResult(this, requestCode, grantResults);
     }
 
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        // don't show option menu when searching
+        MenuInflater inflater = getMenuInflater();
+        inflater.inflate(R.menu.main_menu, menu);
 
+        return super.onCreateOptionsMenu(menu);
+    }
 
-//    class EventInfoWindow implements GoogleMap.InfoWindowAdapter {
-//        View view;
-//
-//        public EventInfoWindow() {
-//            view = getLayoutInflater().inflate(R.layout.event_info_window, null);
-//        }
-//        @Override
-//        public View getInfoWindow(Marker marker) {
-//            return null;
-//        }
-//
-//        @Override
-//        public View getInfoContents(Marker marker) {
-//            Event event = (Event) marker.getTag();
-//            TextView name = (TextView) view.findViewById(R.id.name);
-//            name.setText(event.getName());
-//            TextView description = (TextView) view.findViewById(R.id.description);
-//            description.setText(event.getDescription());
-//            ImageView coverPicture = (ImageView) view.findViewById(R.id.coverPicture);
-//            coverPicture.setImageURI(Uri.parse(event.getCoverPicture()));
-//            return view;
-//        }
-//    }
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        switch (item.getItemId()) {
+            // settings bottom sheet
+            case R.id.action_settings:
+                View sheetView = getLayoutInflater().inflate(R.layout.settings_bottom_sheet, null);
+                TextView vDistance = (TextView) sheetView.findViewById(R.id.distance);
+                SeekBar vDistanceChooser = (SeekBar) sheetView.findViewById(R.id.distance_chooser);
+
+                int distance = sharedPreferences.getInt(getString(R.string.preference_distance), 5);
+                vDistance.setText(distance * 100 + " metres");
+
+                vDistanceChooser.setMax(25);
+                vDistanceChooser.incrementProgressBy(1);
+                vDistanceChooser.setProgress(distance);
+                vDistanceChooser.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+
+                    @Override
+                    public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+
+                        sharedPreferences.edit()
+                                .putInt(getString(R.string.preference_distance), progress)
+                                .commit();
+
+                        vDistance.setText(progress * 100 + " metres");
+                    }
+
+                    @Override
+                    public void onStartTrackingTouch(SeekBar seekBar) {
+
+                    }
+
+                    @Override
+                    public void onStopTrackingTouch(SeekBar seekBar) {
+
+                    }
+                });
+                Switch vClusterMarker = (Switch) sheetView.findViewById(R.id.cluster_marker);
+                vClusterMarker.setChecked(false);
+
+                BottomSheetDialog mBottomSheetDialog = new BottomSheetDialog(this);
+                mBottomSheetDialog.setContentView(sheetView);
+                mBottomSheetDialog.show();
+                return true;
+            case R.id.action_refresh:
+                MapsActivityPermissionsDispatcher.updateLocationWithCheck(this);
+            default:
+                return super.onOptionsItemSelected(item);
+        }
+    }
 }

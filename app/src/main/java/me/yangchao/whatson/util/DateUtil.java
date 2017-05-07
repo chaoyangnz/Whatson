@@ -22,6 +22,7 @@ public class DateUtil {
         } catch (ParseException e) {
             e.printStackTrace();
         }
+        if(date == null) return "";
         return new SimpleDateFormat("yyyy-MM-dd HH:mm").format(date);
     }
 
