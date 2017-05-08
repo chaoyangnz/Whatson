@@ -106,6 +106,9 @@ public class MapsActivity extends BaseActivity implements OnMapReadyCallback, Go
         ButterKnife.bind(this);
 
         sharedPreferences = getPreferences(Context.MODE_PRIVATE);
+        sharedPreferences.registerOnSharedPreferenceChangeListener((p, key) -> {
+            if(key.equals("distance")) refreshUI();
+        });
 
         addToolbar(true);
 
@@ -208,7 +211,7 @@ public class MapsActivity extends BaseActivity implements OnMapReadyCallback, Go
         uiSettings.setZoomControlsEnabled(true);
         this.googleMap.setOnMarkerClickListener(this);
 
-        MapsActivityPermissionsDispatcher.updateLocationWithCheck(this);
+        refreshUI();
     }
 
     @Override
@@ -237,6 +240,14 @@ public class MapsActivity extends BaseActivity implements OnMapReadyCallback, Go
         return true;
     }
 
+    public void refreshUI() {
+        if(currentLocation != null) {
+            doRefreshEvents();
+        } else {
+            MapsActivityPermissionsDispatcher.updateLocationWithCheck(this);
+        }
+    }
+
     @NeedsPermission(Manifest.permission.ACCESS_FINE_LOCATION)
     @SuppressWarnings({"MissingPermission"})
     public void updateLocation() {
@@ -245,7 +256,7 @@ public class MapsActivity extends BaseActivity implements OnMapReadyCallback, Go
         LocationRequest request = LocationRequest.create() //standard GMS LocationRequest
                 .setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY)
 //                .setNumUpdates(5)
-                .setInterval(30_000);
+                .setInterval(300_000);
 
         locationProvider = new ReactiveLocationProvider(this);
         if(locationUpdated != null) {
@@ -254,11 +265,14 @@ public class MapsActivity extends BaseActivity implements OnMapReadyCallback, Go
         locationUpdated = locationProvider.getUpdatedLocation(request).subscribe(location -> {
             Log.d("Location update", location.toString());
             currentLocation = new LatLng(location.getLatitude(), location.getLongitude());
-            refreshEvents();
+            doRefreshEvents();
         });
     }
 
-    private void refreshEvents() {
+    /**
+     * query events by current location
+     */
+    private void doRefreshEvents() {
 
         googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLocation, 15));
 
@@ -340,13 +354,10 @@ public class MapsActivity extends BaseActivity implements OnMapReadyCallback, Go
                 mBottomSheetDialog = new BottomSheetDialog(this);
                 mBottomSheetDialog.setContentView(sheetView);
                 mBottomSheetDialog.show();
+
                 return true;
             case R.id.action_refresh:
-                if(currentLocation != null) {
-                    refreshEvents();
-                } else {
-                    MapsActivityPermissionsDispatcher.updateLocationWithCheck(this);
-                }
+                refreshUI();
                 return true;
             case R.id.action_help:
                 sheetView = getLayoutInflater().inflate(R.layout.help_bottom_sheet, null);
