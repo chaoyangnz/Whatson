@@ -423,8 +423,6 @@ public class MapsActivity extends BaseActivity implements OnMapReadyCallback, Go
                 });
                 mBottomSheetDialog.setContentView(sheetView);
                 mBottomSheetDialog.show();
-
-
                 return true;
             case R.id.action_refresh:
                 refreshUI();

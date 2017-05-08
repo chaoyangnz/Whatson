@@ -29,7 +29,7 @@
                 android:id="@+id/event_name"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:textSize="@dimen/medium_margin_size"
+                android:textSize="16dp"
                 android:textColor="@color/colorWhite"
                 android:gravity="center_vertical"/>
 
