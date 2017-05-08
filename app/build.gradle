@@ -40,7 +40,7 @@ dependencies {
     compile 'com.google.android.gms:play-services-places:10.2.4'
     compile 'com.google.maps.android:android-maps-utils:0.4+'
     compile 'pl.charmas.android:android-reactive-location:0.10@aar'
-    compile 'io.reactivex:rxjava:1.2.10'
+    compile 'io.reactivex:rxjava:1.2.0'
     compile 'com.github.hotchemi:permissionsdispatcher:2.4.0', {
         // if you don't use android.app.Fragment you can exclude support for them
         exclude module: "support-v13"
@@ -52,4 +52,5 @@ dependencies {
     annotationProcessor 'com.jakewharton:butterknife-compiler:8.5.1'
     compile 'com.google.code.gson:gson:2.8.0'
     compile 'com.github.bumptech.glide:glide:3.7.0'
+    compile 'us.feras.mdv:markdownview:1.1.0'
 }

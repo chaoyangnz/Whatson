@@ -21,7 +21,7 @@
             android:id="@+id/title_zone"
             android:layout_width="match_parent"
             android:layout_height="80dp"
-            android:padding="16dp"
+            android:padding="@dimen/normal_margin_size"
             android:orientation="vertical"
             android:background="@color/colorBottomSheetTitle">
 
@@ -49,7 +49,7 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:paddingTop="16dp"
+        android:paddingTop="@dimen/normal_margin_size"
         android:paddingBottom="8dp"
         android:orientation="horizontal">
             <ImageView
@@ -137,7 +137,7 @@
             android:id="@+id/event_description"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:padding="16dp"/>
+            android:padding="@dimen/normal_margin_size"/>
     </android.support.v4.widget.NestedScrollView>
 
 

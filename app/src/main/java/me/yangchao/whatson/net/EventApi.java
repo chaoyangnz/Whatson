@@ -1,5 +1,7 @@
 package me.yangchao.whatson.net;
 
+import android.util.Log;
+
 import com.android.volley.DefaultRetryPolicy;
 import com.android.volley.Request;
 import com.android.volley.RetryPolicy;
@@ -28,6 +30,7 @@ public class EventApi {
     public static void getNearbyEvents(LatLng latLng, int distance, String sort, Consumer<List<Event>> consumer) {
         String url = EVENTS_API + "?lat=" + latLng.latitude + "&lng="
                 + latLng.longitude + "&distance=" + distance + "&sort=" + sort;
+        Log.d("Events API", "Prepare to request: " + url);
         JsonObjectRequest request = new JsonObjectRequest(Request.Method.GET, url, null,
         response -> {
             try {

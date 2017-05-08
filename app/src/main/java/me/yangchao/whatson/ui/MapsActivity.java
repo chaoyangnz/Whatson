@@ -12,6 +12,7 @@ import android.support.annotation.NonNull;
 import android.support.design.widget.BottomSheetBehavior;
 import android.support.design.widget.BottomSheetDialog;
 import android.support.design.widget.FloatingActionButton;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
@@ -22,6 +23,7 @@ import android.widget.Switch;
 import android.widget.TextView;
 
 import com.bumptech.glide.Glide;
+import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
@@ -33,11 +35,9 @@ import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.Polyline;
 import com.google.android.gms.maps.model.PolylineOptions;
-import com.google.maps.android.clustering.ClusterManager;
 
 import org.w3c.dom.Document;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -55,6 +55,8 @@ import me.yangchao.whatson.util.StringUtil;
 import permissions.dispatcher.NeedsPermission;
 import permissions.dispatcher.RuntimePermissions;
 import pl.charmas.android.reactivelocation.ReactiveLocationProvider;
+import rx.Subscription;
+import us.feras.mdv.MarkdownView;
 
 import static android.support.design.widget.BottomSheetBehavior.STATE_EXPANDED;
 import static android.support.design.widget.BottomSheetBehavior.STATE_HIDDEN;
@@ -64,8 +66,12 @@ import static android.view.View.VISIBLE;
 public class MapsActivity extends BaseActivity implements OnMapReadyCallback, GoogleMap.OnMarkerClickListener {
     GoogleMap googleMap;
     UiSettings uiSettings;
+    // location provider
     ReactiveLocationProvider locationProvider;
+    Subscription locationUpdated;
 
+    @BindView(R.id.bottom_sheet)
+    View vBottomSheet;
     BottomSheetBehavior<View> bottomSheetBehavior;
 
     @BindView(R.id.event_name)
@@ -103,15 +109,15 @@ public class MapsActivity extends BaseActivity implements OnMapReadyCallback, Go
 
         addToolbar(true);
 
+        // Google Map fragment
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
 
+        // location provider
         locationProvider = new ReactiveLocationProvider(this);
 
-        View llBottomSheet = findViewById(R.id.bottom_sheet);
-
         // init the bottom sheet behavior
-        bottomSheetBehavior = BottomSheetBehavior.from(llBottomSheet);
+        bottomSheetBehavior = BottomSheetBehavior.from(vBottomSheet);
         bottomSheetBehavior.setState(BottomSheetBehavior.STATE_HIDDEN);
         bottomSheetBehavior.setBottomSheetCallback(new BottomSheetBehavior.BottomSheetCallback() {
             @Override
@@ -128,7 +134,6 @@ public class MapsActivity extends BaseActivity implements OnMapReadyCallback, Go
 
             @Override
             public void onSlide(@NonNull View bottomSheet, float slideOffset) {
-                System.out.println(slideOffset);
                 if(slideOffset > .75f) {
                     vEventCoverPicture.setVisibility(VISIBLE);
                 } else {
@@ -136,6 +141,8 @@ public class MapsActivity extends BaseActivity implements OnMapReadyCallback, Go
                 }
             }
         });
+
+        // FAB
         routeFAB.hide();
         routeFAB.setOnClickListener(v -> {
             if(currentEvent != null && currentLocation != null) {
@@ -151,14 +158,14 @@ public class MapsActivity extends BaseActivity implements OnMapReadyCallback, Go
                 try {
                     Document doc = (Document) msg.obj;
                     GMapV2Direction md = new GMapV2Direction();
-                    ArrayList<LatLng> directionPoint = md.getDirection(doc);
+                    List<LatLng> directionPoints = md.getDirection(doc);
                     PolylineOptions rectLine = new PolylineOptions().
                             pattern(Arrays.asList(new Dot())).
                             width(20).
                             color(Color.DKGRAY);
 
-                    for (int i = 0; i < directionPoint.size(); i++) {
-                        rectLine.add(directionPoint.get(i));
+                    for (LatLng directionPoint : directionPoints) {
+                        rectLine.add(directionPoint);
                     }
                     currentRoute = googleMap.addPolyline(rectLine);
                     md.getDurationText(doc);
@@ -169,8 +176,6 @@ public class MapsActivity extends BaseActivity implements OnMapReadyCallback, Go
         };
 
         new GMapV2DirectionAsyncTask(handler, sourcePosition, destPosition, GMapV2Direction.MODE_WALKING).execute();
-
-
     }
 
     @Override
@@ -180,6 +185,9 @@ public class MapsActivity extends BaseActivity implements OnMapReadyCallback, Go
 
     @Override
     protected void onStop() {
+        if(locationUpdated != null) {
+            locationUpdated.unsubscribe();
+        }
         super.onStop();
     }
 
@@ -198,14 +206,10 @@ public class MapsActivity extends BaseActivity implements OnMapReadyCallback, Go
         googleMap.setPadding(0, MetricsUtil.dpToPx(this, 80), 0, MetricsUtil.dpToPx(this, 100));
         uiSettings = this.googleMap.getUiSettings();
         uiSettings.setZoomControlsEnabled(true);
-//        this.googleMap.setInfoWindowAdapter(new EventInfoWindow());
         this.googleMap.setOnMarkerClickListener(this);
 
         MapsActivityPermissionsDispatcher.updateLocationWithCheck(this);
     }
-
-    // Declare a variable for the cluster manager.
-    private ClusterManager<EventClusterItem> mClusterManager;
 
     @Override
     public boolean onMarkerClick(Marker marker) {
@@ -237,29 +241,42 @@ public class MapsActivity extends BaseActivity implements OnMapReadyCallback, Go
     @SuppressWarnings({"MissingPermission"})
     public void updateLocation() {
         googleMap.setMyLocationEnabled(true);
-//        uiSettings.setMyLocationButtonEnabled(true);
-        locationProvider.getLastKnownLocation()
-                .subscribe(location -> {
-                    currentLocation = new LatLng(location.getLatitude(), location.getLongitude());
-                    googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLocation, 15));
 
-                    EventApi.getNearbyEvents(currentLocation, 100*sharedPreferences.getInt(getString(R.string.preference_distance), 5), "venue", events -> {
-                        events.stream().collect(Collectors.groupingBy(event -> event.getLatLng())).entrySet().stream()
-                        .forEach(e -> {
-                            LatLng there = e.getKey();
-                            List<Event> eventsThere = e.getValue();
-                            for(int i = 0; i < eventsThere.size(); ++i) {
-                                Event event = eventsThere.get(i);
-                                googleMap.addMarker(new MarkerOptions()
+        LocationRequest request = LocationRequest.create() //standard GMS LocationRequest
+                .setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY)
+//                .setNumUpdates(5)
+                .setInterval(30_000);
+
+        locationProvider = new ReactiveLocationProvider(this);
+        if(locationUpdated != null) {
+            locationUpdated.unsubscribe();
+        }
+        locationUpdated = locationProvider.getUpdatedLocation(request).subscribe(location -> {
+            Log.d("Location update", location.toString());
+            currentLocation = new LatLng(location.getLatitude(), location.getLongitude());
+            refreshEvents();
+        });
+    }
+
+    private void refreshEvents() {
+
+        googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLocation, 15));
+
+        EventApi.getNearbyEvents(currentLocation, 100*sharedPreferences.getInt(getString(R.string.preference_distance), 5), "venue", events -> {
+            events.stream().collect(Collectors.groupingBy(event -> event.getLatLng())).entrySet().stream()
+                    .forEach(e -> {
+                        LatLng there = e.getKey();
+                        List<Event> eventsThere = e.getValue();
+                        for(int i = 0; i < eventsThere.size(); ++i) {
+                            Event event = eventsThere.get(i);
+                            googleMap.addMarker(new MarkerOptions()
                                     .position(event.getLatLng(i))
                                     .title(event.getName()))
-                                .setTag(event);
-                            }
-                        });
-
+                                    .setTag(event);
+                        }
                     });
 
-                });
+        });
     }
 
     @Override
@@ -280,10 +297,12 @@ public class MapsActivity extends BaseActivity implements OnMapReadyCallback, Go
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
+        View sheetView = null;
+        BottomSheetDialog mBottomSheetDialog = null;
         switch (item.getItemId()) {
             // settings bottom sheet
             case R.id.action_settings:
-                View sheetView = getLayoutInflater().inflate(R.layout.settings_bottom_sheet, null);
+                sheetView = getLayoutInflater().inflate(R.layout.settings_bottom_sheet, null);
                 TextView vDistance = (TextView) sheetView.findViewById(R.id.distance);
                 SeekBar vDistanceChooser = (SeekBar) sheetView.findViewById(R.id.distance_chooser);
 
@@ -318,12 +337,25 @@ public class MapsActivity extends BaseActivity implements OnMapReadyCallback, Go
                 Switch vClusterMarker = (Switch) sheetView.findViewById(R.id.cluster_marker);
                 vClusterMarker.setChecked(false);
 
-                BottomSheetDialog mBottomSheetDialog = new BottomSheetDialog(this);
+                mBottomSheetDialog = new BottomSheetDialog(this);
                 mBottomSheetDialog.setContentView(sheetView);
                 mBottomSheetDialog.show();
                 return true;
             case R.id.action_refresh:
-                MapsActivityPermissionsDispatcher.updateLocationWithCheck(this);
+                if(currentLocation != null) {
+                    refreshEvents();
+                } else {
+                    MapsActivityPermissionsDispatcher.updateLocationWithCheck(this);
+                }
+                return true;
+            case R.id.action_help:
+                sheetView = getLayoutInflater().inflate(R.layout.help_bottom_sheet, null);
+                MarkdownView markdownView = (MarkdownView) sheetView.findViewById(R.id.help_markdownView);
+                markdownView.loadMarkdownFile("file:///android_asset/README.md", "file:///android_asset/markdown.css");
+                mBottomSheetDialog = new BottomSheetDialog(this);
+                mBottomSheetDialog.setContentView(sheetView);
+                mBottomSheetDialog.show();
+                return true;
             default:
                 return super.onOptionsItemSelected(item);
         }

@@ -16,6 +16,7 @@ import org.w3c.dom.NodeList;
 
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.List;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -165,9 +166,9 @@ public class GMapV2Direction {
 
     }
 
-    public ArrayList<LatLng> getDirection(Document doc) {
+    public List<LatLng> getDirection(Document doc) {
         NodeList nl1, nl2, nl3;
-        ArrayList<LatLng> listGeopoints = new ArrayList<LatLng>();
+        List<LatLng> listGeopoints = new ArrayList<LatLng>();
         nl1 = doc.getElementsByTagName("step");
         if (nl1.getLength() > 0) {
             for (int i = 0; i < nl1.getLength(); i++) {
