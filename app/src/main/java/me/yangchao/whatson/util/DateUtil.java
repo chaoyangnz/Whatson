@@ -15,6 +15,7 @@ public class DateUtil {
     }
 
     public static String formatTime(String utcTime) {
+        if(utcTime == null) return "";
         SimpleDateFormat incomingFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ");
         Date date = null;
         try {
