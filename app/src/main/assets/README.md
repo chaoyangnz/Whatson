@@ -45,3 +45,4 @@ If you fail to connect or the connection is unstable, please contact richd.yang@
 <img src="Screenshot4.png" width="300" />
 <img src="Screenshot5.png" width="300" />
 <img src="Screenshot6.png" width="300" />
+<img src="Screenshot7.png" width="300" />
