@@ -123,7 +123,6 @@ public class MapsActivity extends BaseActivity implements OnMapReadyCallback, Go
         ButterKnife.bind(this);
 
         sharedPreferences = getPreferences(Context.MODE_PRIVATE);
-//        sharedPreferences.registerOnSharedPreferenceChangeListener(this);
 
         addToolbar(true);
 
@@ -370,7 +369,6 @@ public class MapsActivity extends BaseActivity implements OnMapReadyCallback, Go
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
-        // don't show option menu when searching
         MenuInflater inflater = getMenuInflater();
         inflater.inflate(R.menu.main_menu, menu);
 

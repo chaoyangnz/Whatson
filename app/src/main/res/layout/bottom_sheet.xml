@@ -29,7 +29,7 @@
                 android:id="@+id/event_name"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:textSize="18dp"
+                android:textSize="@dimen/medium_margin_size"
                 android:textColor="@color/colorWhite"
                 android:gravity="center_vertical"/>
 
@@ -44,13 +44,11 @@
         </LinearLayout>
 
 
-
-
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:paddingTop="@dimen/normal_margin_size"
-        android:paddingBottom="8dp"
+        android:paddingBottom="@dimen/medium_margin_size"
         android:orientation="horizontal">
             <ImageView
                 android:layout_width="50dp"
@@ -65,13 +63,13 @@
     <View
         android:layout_width="match_parent"
         android:layout_height="1dp"
-        android:background="#e6e6e6"/>
+        android:background="@color/darkGrey"/>
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:paddingTop="8dp"
-        android:paddingBottom="8dp"
+        android:paddingTop="@dimen/medium_margin_size"
+        android:paddingBottom="@dimen/medium_margin_size"
         android:orientation="horizontal">
         <ImageView
             android:layout_width="50dp"
@@ -86,13 +84,13 @@
     <View
         android:layout_width="match_parent"
         android:layout_height="1dp"
-        android:background="#e6e6e6"/>
+        android:background="@color/darkGrey"/>
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:paddingTop="8dp"
-        android:paddingBottom="8dp"
+        android:paddingTop="@dimen/medium_margin_size"
+        android:paddingBottom="@dimen/medium_margin_size"
         android:orientation="horizontal">
         <ImageView
             android:layout_width="50dp"
@@ -107,13 +105,13 @@
     <View
         android:layout_width="match_parent"
         android:layout_height="1dp"
-        android:background="#e6e6e6"/>
+        android:background="@color/darkGrey"/>
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:paddingTop="8dp"
-        android:paddingBottom="8dp"
+        android:paddingTop="@dimen/medium_margin_size"
+        android:paddingBottom="@dimen/medium_margin_size"
         android:orientation="horizontal">
         <ImageView
             android:layout_width="50dp"
@@ -128,7 +126,7 @@
     <View
         android:layout_width="match_parent"
         android:layout_height="1dp"
-        android:background="#e6e6e6"/>
+        android:background="@color/darkGrey"/>
 
     <android.support.v4.widget.NestedScrollView
         android:layout_height="wrap_content"
