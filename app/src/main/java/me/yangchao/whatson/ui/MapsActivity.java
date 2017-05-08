@@ -2,7 +2,10 @@ package me.yangchao.whatson.ui;
 
 import android.Manifest;
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
@@ -21,6 +24,7 @@ import android.widget.ImageView;
 import android.widget.SeekBar;
 import android.widget.Switch;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.bumptech.glide.Glide;
 import com.google.android.gms.location.LocationRequest;
@@ -29,6 +33,8 @@ import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.UiSettings;
+import com.google.android.gms.maps.model.BitmapDescriptor;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.Dot;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
@@ -38,6 +44,7 @@ import com.google.android.gms.maps.model.PolylineOptions;
 
 import org.w3c.dom.Document;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -58,6 +65,7 @@ import pl.charmas.android.reactivelocation.ReactiveLocationProvider;
 import rx.Subscription;
 import us.feras.mdv.MarkdownView;
 
+import static android.support.design.widget.BottomSheetBehavior.STATE_COLLAPSED;
 import static android.support.design.widget.BottomSheetBehavior.STATE_EXPANDED;
 import static android.support.design.widget.BottomSheetBehavior.STATE_HIDDEN;
 import static android.view.View.VISIBLE;
@@ -92,10 +100,19 @@ public class MapsActivity extends BaseActivity implements OnMapReadyCallback, Go
     TextView vEventStats;
     @BindView(R.id.route_fab)
     FloatingActionButton routeFAB;
+    @BindView(R.id.link_fab)
+    FloatingActionButton linkFAB;
 
     Event currentEvent;
+    Marker currentMarker;
     LatLng currentLocation;
     Polyline currentRoute;
+    List<Marker> markers = new ArrayList<>();
+    boolean first = true;
+
+    private BitmapDescriptor markerIcon;
+    private BitmapDescriptor selectedMarkerIcon;
+
 
     SharedPreferences sharedPreferences;
 
@@ -106,9 +123,7 @@ public class MapsActivity extends BaseActivity implements OnMapReadyCallback, Go
         ButterKnife.bind(this);
 
         sharedPreferences = getPreferences(Context.MODE_PRIVATE);
-        sharedPreferences.registerOnSharedPreferenceChangeListener((p, key) -> {
-            if(key.equals("distance")) refreshUI();
-        });
+//        sharedPreferences.registerOnSharedPreferenceChangeListener(this);
 
         addToolbar(true);
 
@@ -130,8 +145,15 @@ public class MapsActivity extends BaseActivity implements OnMapReadyCallback, Go
                 }
                 if(newState == STATE_HIDDEN) {
                     routeFAB.hide();
-                } else {
+                    linkFAB.hide();
+                }
+                if(newState == STATE_COLLAPSED) {
                     routeFAB.show();
+                    linkFAB.hide();
+                }
+                if(newState == STATE_EXPANDED) {
+                    routeFAB.hide();
+                    linkFAB.show();
                 }
             }
 
@@ -152,6 +174,25 @@ public class MapsActivity extends BaseActivity implements OnMapReadyCallback, Go
                 drawRoute(currentLocation, currentEvent.getLatLng());
             }
         });
+
+        linkFAB.hide();
+        linkFAB.setOnClickListener(v -> {
+            String url = "https://www.facebook.com/events/" + currentEvent.getId();
+            Uri uri = Uri.parse(url);
+            try {
+                ApplicationInfo applicationInfo = getPackageManager().getApplicationInfo("com.facebook.katana", 0);
+                if (applicationInfo.enabled) {
+                    // http://stackoverflow.com/a/24547437/1048340
+                    uri = Uri.parse("fb://facewebmodal/f?href=" + url);
+                }
+            } catch (PackageManager.NameNotFoundException ignored) {}
+            Intent intent = new Intent(Intent.ACTION_VIEW, uri);
+
+            startActivity(intent);
+        });
+
+        markerIcon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE);
+        selectedMarkerIcon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED);
     }
 
     private void drawRoute(LatLng sourcePosition, LatLng destPosition) {
@@ -174,6 +215,8 @@ public class MapsActivity extends BaseActivity implements OnMapReadyCallback, Go
                     md.getDurationText(doc);
                 } catch (Exception e) {
                     e.printStackTrace();
+                    Toast.makeText(MapsActivity.this, "Networking failure when planning routes", Toast.LENGTH_LONG)
+                            .show();
                 }
             }
         };
@@ -204,23 +247,34 @@ public class MapsActivity extends BaseActivity implements OnMapReadyCallback, Go
      * installed Google Play services and returned to the app.
      */
     @Override
-    public void onMapReady(GoogleMap googleMap) {
-        this.googleMap = googleMap;
+    public void onMapReady(GoogleMap _googleMap) {
+        this.googleMap = _googleMap;
         googleMap.setPadding(0, MetricsUtil.dpToPx(this, 80), 0, MetricsUtil.dpToPx(this, 100));
-        uiSettings = this.googleMap.getUiSettings();
+        uiSettings = googleMap.getUiSettings();
         uiSettings.setZoomControlsEnabled(true);
-        this.googleMap.setOnMarkerClickListener(this);
+        googleMap.setOnMarkerClickListener(this);
 
         refreshUI();
     }
 
     @Override
     public boolean onMarkerClick(Marker marker) {
+        if(currentMarker != null) {
+            try {
+                currentMarker.setIcon(markerIcon);
+            } catch (IllegalArgumentException ex) {}
+        }
 
+        try {
+            marker.setIcon(selectedMarkerIcon);
+        } catch (IllegalArgumentException ex) {}
+        currentMarker = marker;
+
+        // process events
         Event event = (Event) marker.getTag();
         currentEvent = event;
 
-        // update UI
+        // update event information UI
         vEventName.setText(StringUtil.trim(event.getName(), 30));
         vEventDescription.setText(event.getDescription());
         vEventVenue.setText(event.getVenue().getName());
@@ -256,7 +310,9 @@ public class MapsActivity extends BaseActivity implements OnMapReadyCallback, Go
         LocationRequest request = LocationRequest.create() //standard GMS LocationRequest
                 .setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY)
 //                .setNumUpdates(5)
-                .setInterval(300_000);
+                .setFastestInterval(60_000)
+                .setInterval(3600_000)
+                .setSmallestDisplacement(5);
 
         locationProvider = new ReactiveLocationProvider(this);
         if(locationUpdated != null) {
@@ -265,6 +321,10 @@ public class MapsActivity extends BaseActivity implements OnMapReadyCallback, Go
         locationUpdated = locationProvider.getUpdatedLocation(request).subscribe(location -> {
             Log.d("Location update", location.toString());
             currentLocation = new LatLng(location.getLatitude(), location.getLongitude());
+            if(first) {
+                googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLocation, 15));
+                first = false;
+            }
             doRefreshEvents();
         });
     }
@@ -273,23 +333,31 @@ public class MapsActivity extends BaseActivity implements OnMapReadyCallback, Go
      * query events by current location
      */
     private void doRefreshEvents() {
-
-        googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLocation, 15));
-
         EventApi.getNearbyEvents(currentLocation, 100*sharedPreferences.getInt(getString(R.string.preference_distance), 5), "venue", events -> {
+            // clear markers
+            for(Marker marker : markers) {
+                marker.remove();
+            }
+            markers.clear();
+            // set new markers
             events.stream().collect(Collectors.groupingBy(event -> event.getLatLng())).entrySet().stream()
                     .forEach(e -> {
                         LatLng there = e.getKey();
                         List<Event> eventsThere = e.getValue();
                         for(int i = 0; i < eventsThere.size(); ++i) {
                             Event event = eventsThere.get(i);
-                            googleMap.addMarker(new MarkerOptions()
+                            Marker marker = googleMap.addMarker(new MarkerOptions()
                                     .position(event.getLatLng(i))
-                                    .title(event.getName()))
-                                    .setTag(event);
+                                    .title(event.getName())
+                                    .icon(markerIcon));
+                            marker.setTag(event);
+                            markers.add(marker);
                         }
                     });
 
+        }, e -> {
+            Toast.makeText(this, "Networking failure when searching events", Toast.LENGTH_LONG)
+            .show();
         });
     }
 
@@ -352,8 +420,12 @@ public class MapsActivity extends BaseActivity implements OnMapReadyCallback, Go
                 vClusterMarker.setChecked(false);
 
                 mBottomSheetDialog = new BottomSheetDialog(this);
+                mBottomSheetDialog.setOnDismissListener(dialog -> {
+                    refreshUI();
+                });
                 mBottomSheetDialog.setContentView(sheetView);
                 mBottomSheetDialog.show();
+
 
                 return true;
             case R.id.action_refresh:

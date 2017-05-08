@@ -27,7 +27,7 @@ public class EventApi {
 
     public static final String EVENTS_API = "http://139.59.104.254:3000/events";
 
-    public static void getNearbyEvents(LatLng latLng, int distance, String sort, Consumer<List<Event>> consumer) {
+    public static void getNearbyEvents(LatLng latLng, int distance, String sort, Consumer<List<Event>> consumer, Consumer<Exception> errorConsumer) {
         String url = EVENTS_API + "?lat=" + latLng.latitude + "&lng="
                 + latLng.longitude + "&distance=" + distance + "&sort=" + sort;
         Log.d("Events API", "Prepare to request: " + url);
@@ -40,9 +40,11 @@ public class EventApi {
                 List<Event> events = gson.fromJson(response.getJSONArray("events").toString(), type);
                 consumer.accept(events);
             } catch (JSONException e) {
+                errorConsumer.accept(e);
                 e.printStackTrace();
             }
         }, error -> {
+            errorConsumer.accept(error);
             System.err.println(error);
         });
         int socketTimeout = 30_000; // 30 seconds. You can change it
